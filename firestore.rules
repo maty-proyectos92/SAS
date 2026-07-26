@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for Multi-Tenant Isolation
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function isEmpresaMember(empresaId) {
+      return isAuthenticated() && (
+        getUserData().empresaId == empresaId || getUserData().rol == 'superadmin'
+      );
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().rol == 'superadmin';
+    }
+
+    // Empresas collection (Multi-tenant root)
+    match /empresas/{empresaId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || (isEmpresaMember(empresaId) && getUserData().rol == 'dueno');
+    }
+
+    // Usuarios
+    match /usuarios/{userId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Multi-tenant scoped collections
+    match /turnos/{turnoId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /clientes/{clienteId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /empleados/{empleadoId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /servicios/{servicioId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /categorias_servicios/{catId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /pagos/{pagoId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /cajas_diarias/{cajaId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+
+    match /notificaciones/{notifId} {
+      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    }
+  }
+}

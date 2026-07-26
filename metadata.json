@@ -1,0 +1,6 @@
+{
+  "name": "TurnoSaaS - Gestión Multiempresa",
+  "description": "Plataforma SaaS multiempresa para agendamiento de turnos, clientes, servicios, empleados, caja y reportes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
