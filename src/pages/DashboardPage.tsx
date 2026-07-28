@@ -317,7 +317,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-sm font-semibold text-slate-900 dark:text-white">{e.nombre}</span>
-                      <p className="text-[10px] text-slate-400">{e.especialidades.join(', ')}</p>
+                      <p className="text-[10px] text-slate-400">{e.especialidad}</p>
                     </div>
                   </div>
                   <span className={`px-2.5 py-1 text-[10px] rounded-lg font-bold uppercase ${
