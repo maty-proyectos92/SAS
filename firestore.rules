@@ -2,67 +2,206 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions for Multi-Tenant Isolation
+    // =========================================================================
+    // REGLA GLOBAL DENEGAR POR DEFECTO
+    // Ningún documento es accesible a menos que coincida con una regla explícita.
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // FUNCIONES HELPER PARA AUTENTICACIÓN Y MULTI-TENANT SECURITY
+    // =========================================================================
+
+    // Verifica si el usuario está autenticado en Firebase Auth
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    // Lee la empresaId primero desde los Custom Claims del Token (0 lecturas extra).
+    // Si aún no está en los claims (usuario recién registrado), realiza fallback a Firestore.
+    function getUserEmpresaId() {
+      return request.auth.token.empresaId != null
+        ? request.auth.token.empresaId
+        : get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.empresaId;
     }
 
-    function isEmpresaMember(empresaId) {
+    // Lee el rol primero desde los Custom Claims del Token. Fallback a Firestore si no existe claim.
+    function getUserRole() {
+      return request.auth.token.rol != null
+        ? request.auth.token.rol
+        : get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
+    }
+
+    // Comprueba si el usuario tiene rol SuperAdmin (Basado estrictamente en rol/claim, sin emails hardcodeados)
+    function isSuperAdmin() {
       return isAuthenticated() && (
-        getUserData().empresaId == empresaId || getUserData().rol == 'superadmin'
+        getUserRole() == 'superadmin' ||
+        request.auth.token.superadmin == true
       );
     }
 
-    function isSuperAdmin() {
-      return isAuthenticated() && getUserData().rol == 'superadmin';
+    // =========================================================================
+    // HELPER FUNCTIONS OPERACIONALES (ISOLATION STRICT EN UPDATE)
+    // =========================================================================
+
+    // LECTURA: El documento debe pertenecer a la empresa del usuario autenticado
+    function canRead() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.empresaId == getUserEmpresaId()
+      );
     }
 
-    // Empresas collection (Multi-tenant root)
-    match /empresas/{empresaId} {
-      allow read: if isAuthenticated();
-      allow write: if isSuperAdmin() || (isEmpresaMember(empresaId) && getUserData().rol == 'dueno');
+    // CREACIÓN: El nuevo documento debe declarar el empresaId de la empresa del usuario
+    function canCreate() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        request.resource.data.empresaId == getUserEmpresaId()
+      );
     }
 
-    // Usuarios
+    // EDICIÓN / UPDATE: El empresaId original Y el nuevo empresaId deben coincidir con la empresa
+    // del usuario. Esto IMPIDE reasignar o mover documentos entre distintas empresas (tenant hopping).
+    function canUpdate() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        (
+          resource.data.empresaId == getUserEmpresaId() &&
+          request.resource.data.empresaId == getUserEmpresaId()
+        )
+      );
+    }
+
+    // ELIMINACIÓN: Solo si el documento pertenece al tenant del usuario
+    function canDelete() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.empresaId == getUserEmpresaId()
+      );
+    }
+
+    // =========================================================================
+    // REGLAS PARA LA COLECCIÓN 'usuarios'
+    // - Un usuario puede consultar su propio perfil.
+    // - Dueños y Administradores pueden gestionar usuarios de su propia empresa (sin cambiar tenant).
+    // - SuperAdmin tiene control total.
+    // =========================================================================
     match /usuarios/{userId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isSuperAdmin() ||
+        (resource != null && resource.data.empresaId == getUserEmpresaId())
+      );
+
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (getUserRole() in ['dueno', 'admin'] && request.resource.data.empresaId == getUserEmpresaId())
+      );
+
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (
+          getUserRole() in ['dueno', 'admin'] &&
+          resource.data.empresaId == getUserEmpresaId() &&
+          request.resource.data.empresaId == getUserEmpresaId()
+        )
+      );
+
+      allow delete: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (getUserRole() in ['dueno', 'admin'] && resource.data.empresaId == getUserEmpresaId())
+      );
     }
 
-    // Multi-tenant scoped collections
-    match /turnos/{turnoId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    // =========================================================================
+    // REGLAS PARA LA COLECCIÓN 'empresas'
+    // - Los usuarios únicamente pueden leer/editar los datos de su propia empresa.
+    // - SuperAdmin tiene control total sobre todas las empresas registradas.
+    // =========================================================================
+    match /empresas/{empresaId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        empresaId == getUserEmpresaId() ||
+        (resource != null && resource.data.id == getUserEmpresaId())
+      );
+
+      allow create: if isAuthenticated() && isSuperAdmin();
+
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (
+          empresaId == getUserEmpresaId() &&
+          getUserRole() in ['dueno', 'admin'] &&
+          resource.data.id == request.resource.data.id
+        )
+      );
+
+      allow delete: if isAuthenticated() && isSuperAdmin();
     }
 
-    match /clientes/{clienteId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    // =========================================================================
+    // REGLAS PARA COLECCIONES DE NEGOCIO MULTI-TENANT
+    // (clientes, empleados, servicios, categorias_servicios, turnos, pagos, cajas_diarias, notificaciones)
+    // Usan los helpers canRead(), canCreate(), canUpdate(), canDelete() para
+    // garantizar estricta separación por tenant y evitar modificación de empresaId.
+    // =========================================================================
+    match /clientes/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
 
-    match /empleados/{empleadoId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    match /empleados/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
 
-    match /servicios/{servicioId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    match /servicios/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
 
-    match /categorias_servicios/{catId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    match /categorias_servicios/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
 
-    match /pagos/{pagoId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    match /turnos/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
 
-    match /cajas_diarias/{cajaId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    match /pagos/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
 
-    match /notificaciones/{notifId} {
-      allow read, write: if isEmpresaMember(resource.data.empresaId || request.resource.data.empresaId);
+    match /cajas_diarias/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
     }
+
+    match /notificaciones/{id} {
+      allow read: if canRead();
+      allow create: if canCreate();
+      allow update: if canUpdate();
+      allow delete: if canDelete();
+    }
+
   }
 }

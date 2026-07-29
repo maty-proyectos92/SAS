@@ -1,0 +1,36 @@
+{
+  "entities": {
+    "empresas": {
+      "title": "Empresas",
+      "description": "Multi-tenant business accounts"
+    },
+    "usuarios": {
+      "title": "Usuarios",
+      "description": "System users and employees"
+    },
+    "turnos": {
+      "title": "Turnos",
+      "description": "Appointments scheduled"
+    },
+    "clientes": {
+      "title": "Clientes",
+      "description": "Customer profiles"
+    },
+    "empleados": {
+      "title": "Empleados",
+      "description": "Staff and specialists"
+    },
+    "servicios": {
+      "title": "Servicios",
+      "description": "Services offered"
+    },
+    "pagos": {
+      "title": "Pagos",
+      "description": "Payments and transactions"
+    },
+    "notificaciones": {
+      "title": "Notificaciones",
+      "description": "System and reminder notifications"
+    }
+  }
+}

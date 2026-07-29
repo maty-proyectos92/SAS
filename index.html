@@ -3,7 +3,39 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>TurnoSaaS - Gestión Multiempresa</title>
+    <script>
+      (function() {
+        try {
+          var nativeFetch = window.fetch ? window.fetch.bind(window) : null;
+          var storedFetch = nativeFetch;
+          
+          function patchFetchGetter(target) {
+            if (!target) return;
+            try {
+              Object.defineProperty(target, 'fetch', {
+                configurable: true,
+                enumerable: true,
+                get: function() {
+                  return storedFetch || nativeFetch;
+                },
+                set: function(fn) {
+                  storedFetch = fn;
+                }
+              });
+            } catch (e) {}
+          }
+
+          patchFetchGetter(window);
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            patchFetchGetter(Window.prototype);
+          }
+          if (typeof globalThis !== 'undefined') {
+            patchFetchGetter(globalThis);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

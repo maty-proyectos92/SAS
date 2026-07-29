@@ -14,7 +14,11 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "types": ["node"],
     "jsx": "react-jsx",
+    "jsxImportSource": "react",
     "paths": {
       "@/*": [
         "./*"

@@ -206,10 +206,10 @@ export const TurnosPage: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              filteredTurnos.map(t => {
-                const cli = clientes.find(c => c.id === t.clienteId);
-                const srv = servicios.find(s => s.id === t.servicioId);
-                const emp = empleados.find(e => e.id === t.empleadoId);
+              filteredTurnos.map((t: Turno) => {
+                const cli = clientes.find((c: Cliente) => c.id === t.clienteId);
+                const srv = servicios.find((s: Servicio) => s.id === t.servicioId);
+                const emp = empleados.find((e: Empleado) => e.id === t.empleadoId);
 
                 return (
                   <tr key={t.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">

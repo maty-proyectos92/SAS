@@ -5,6 +5,9 @@ import {
   initialEmpresas, initialUsuarios, initialClientes, initialEmpleados, 
   initialCategorias, initialServicios, initialTurnos, initialPagos, initialCajas, initialNotificaciones 
 } from './mockData';
+import { 
+  COLLECTIONS, saveToFirestore, deleteFromFirestore, seedFirestoreIfEmpty, initFirestoreRealtimeSync 
+} from './firestoreSync';
 
 const STORAGE_KEYS = {
   EMPRESAS: 'saas_turnos_empresas',
@@ -89,6 +92,10 @@ export function initStorageSeed() {
   if (!localStorage.getItem(STORAGE_KEYS.NOTIFICACIONES)) {
     setLocal(STORAGE_KEYS.NOTIFICACIONES, initialNotificaciones);
   }
+
+  // Seed Firestore in parallel if empty & subscribe to real-time sync
+  seedFirestoreIfEmpty();
+  initFirestoreRealtimeSync(notifyListeners);
 }
 
 initStorageSeed();
@@ -111,12 +118,14 @@ export const StorageService = {
       empresas.push(empresa);
     }
     setLocal(STORAGE_KEYS.EMPRESAS, empresas);
+    saveToFirestore(COLLECTIONS.EMPRESAS, empresa);
   },
 
   deleteEmpresa: (id: string) => {
     let empresas = StorageService.getEmpresas();
     empresas = empresas.filter(e => e.id !== id);
     setLocal(STORAGE_KEYS.EMPRESAS, empresas);
+    deleteFromFirestore(COLLECTIONS.EMPRESAS, id);
   },
 
   // USUARIOS
@@ -135,12 +144,14 @@ export const StorageService = {
       users.push(usuario);
     }
     setLocal(STORAGE_KEYS.USUARIOS, users);
+    saveToFirestore(COLLECTIONS.USUARIOS, usuario);
   },
 
   deleteUsuario: (id: string) => {
     let users = getLocal<Usuario[]>(STORAGE_KEYS.USUARIOS, initialUsuarios);
     users = users.filter(u => u.id !== id);
     setLocal(STORAGE_KEYS.USUARIOS, users);
+    deleteFromFirestore(COLLECTIONS.USUARIOS, id);
   },
 
   // CLIENTES
@@ -158,12 +169,14 @@ export const StorageService = {
       clientes.push(cliente);
     }
     setLocal(STORAGE_KEYS.CLIENTES, clientes);
+    saveToFirestore(COLLECTIONS.CLIENTES, cliente);
   },
 
   deleteCliente: (id: string) => {
     let clientes = getLocal<Cliente[]>(STORAGE_KEYS.CLIENTES, initialClientes);
     clientes = clientes.filter(c => c.id !== id);
     setLocal(STORAGE_KEYS.CLIENTES, clientes);
+    deleteFromFirestore(COLLECTIONS.CLIENTES, id);
   },
 
   // EMPLEADOS
@@ -181,12 +194,14 @@ export const StorageService = {
       empleados.push(empleado);
     }
     setLocal(STORAGE_KEYS.EMPLEADOS, empleados);
+    saveToFirestore(COLLECTIONS.EMPLEADOS, empleado);
   },
 
   deleteEmpleado: (id: string) => {
     let list = getLocal<Empleado[]>(STORAGE_KEYS.EMPLEADOS, initialEmpleados);
     list = list.filter(e => e.id !== id);
     setLocal(STORAGE_KEYS.EMPLEADOS, list);
+    deleteFromFirestore(COLLECTIONS.EMPLEADOS, id);
   },
 
   // CATEGORIAS & SERVICIOS
@@ -204,6 +219,7 @@ export const StorageService = {
       cats.push(categoria);
     }
     setLocal(STORAGE_KEYS.CATEGORIAS, cats);
+    saveToFirestore(COLLECTIONS.CATEGORIAS, categoria);
   },
 
   getServicios: (empresaId: string): Servicio[] => {
@@ -220,12 +236,14 @@ export const StorageService = {
       srvs.push(servicio);
     }
     setLocal(STORAGE_KEYS.SERVICIOS, srvs);
+    saveToFirestore(COLLECTIONS.SERVICIOS, servicio);
   },
 
   deleteServicio: (id: string) => {
     let srvs = getLocal<Servicio[]>(STORAGE_KEYS.SERVICIOS, initialServicios);
     srvs = srvs.filter(s => s.id !== id);
     setLocal(STORAGE_KEYS.SERVICIOS, srvs);
+    deleteFromFirestore(COLLECTIONS.SERVICIOS, id);
   },
 
   // TURNOS
@@ -243,12 +261,14 @@ export const StorageService = {
       turnos.push(turno);
     }
     setLocal(STORAGE_KEYS.TURNOS, turnos);
+    saveToFirestore(COLLECTIONS.TURNOS, turno);
   },
 
   deleteTurno: (id: string) => {
     let list = getLocal<Turno[]>(STORAGE_KEYS.TURNOS, initialTurnos);
     list = list.filter(t => t.id !== id);
     setLocal(STORAGE_KEYS.TURNOS, list);
+    deleteFromFirestore(COLLECTIONS.TURNOS, id);
   },
 
   // PAGOS
@@ -261,6 +281,7 @@ export const StorageService = {
     const pagos = getLocal<Pago[]>(STORAGE_KEYS.PAGOS, initialPagos);
     pagos.push(pago);
     setLocal(STORAGE_KEYS.PAGOS, pagos);
+    saveToFirestore(COLLECTIONS.PAGOS, pago);
 
     // Update Turno cobrado status if associated
     if (pago.turnoId) {
@@ -271,6 +292,7 @@ export const StorageService = {
         turno.pagoAsociadoId = pago.id;
         turno.estado = 'completado';
         setLocal(STORAGE_KEYS.TURNOS, turnos);
+        saveToFirestore(COLLECTIONS.TURNOS, turno);
       }
     }
 
@@ -307,6 +329,7 @@ export const StorageService = {
     cajaToday.totalIngresos += pago.monto;
     cajaToday.saldoFinal = (cajaToday.saldoInicial + cajaToday.totalIngresos) - cajaToday.totalEgresos;
     setLocal(STORAGE_KEYS.CAJAS, cajas);
+    saveToFirestore(COLLECTIONS.CAJAS, cajaToday);
   },
 
   // CAJAS
@@ -329,6 +352,7 @@ export const StorageService = {
       cajas.push(caja);
     }
     setLocal(STORAGE_KEYS.CAJAS, cajas);
+    saveToFirestore(COLLECTIONS.CAJAS, caja);
   },
 
   // NOTIFICACIONES
@@ -341,5 +365,6 @@ export const StorageService = {
     const notifs = getLocal<Notificacion[]>(STORAGE_KEYS.NOTIFICACIONES, initialNotificaciones);
     notifs.unshift(notif);
     setLocal(STORAGE_KEYS.NOTIFICACIONES, notifs);
+    saveToFirestore(COLLECTIONS.NOTIFICACIONES, notif);
   }
 };
